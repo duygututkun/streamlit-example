@@ -1,49 +1,142 @@
-(.venv) ogrencigirisi@Mac-MacBook-Pro-2 trendyorum % pip freeze requirements
-altair==5.3.0
-attrs==23.2.0
-blinker==1.7.0
-cachetools==5.3.3
-certifi==2024.2.2
-charset-normalizer==3.3.2
-click==8.1.7
-gitdb==4.0.11
-GitPython==3.1.43
-idna==3.7
-Jinja2==3.1.3
-joblib==1.4.0
-jsonschema==4.21.1
-jsonschema-specifications==2023.12.1
-markdown-it-py==3.0.0
-MarkupSafe==2.1.5
-mdurl==0.1.2
-numpy==1.26.4
-packaging==24.0
-pandas==2.2.2
-pillow==10.3.0
-protobuf==4.25.3
-pyarrow==16.0.0
-pydeck==0.8.1b0
-Pygments==2.17.2
-python-dateutil==2.9.0.post0
-pytz==2024.1
-referencing==0.34.0
-requests==2.31.0
-rich==13.7.1
-rpds-py==0.18.0
-scikit-learn==1.4.2
-scipy==1.13.0
-six==1.16.0
-smmap==5.0.1
-streamlit==1.33.0
-tenacity==8.2.3
-threadpoolctl==3.4.0
-toml==0.10.2
-toolz==0.12.1
-tornado==6.4
-typing_extensions==4.11.0
-tzdata==2024.1
-urllib3==2.2.1
-(.venv) ogrencigirisi@Mac-MacBook-Pro-2 trendyorum % pip freeze >requirements.txt
-(.venv) ogrencigirisi@Mac-MacBook-Pro-2 trendyorum % 
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+import string
+import sqlite3
+import datetime 
+
+zaman=str(datetime.datetime.now())
+
+conn=sqlite3.connect("trendyorum.sqlite3")
+c=conn.cursor()
+
+c.execute("CREATE TABLE IF NOT EXISTS testler(yorum TEXT,sonuc TEXT,zaman TEXT)")
+conn.commit()
 
 
+
+df=pd.read_csv("yorum.csv.zip",on_bad_lines="skip",delimiter=";")
+
+
+def temizle(sutun):
+    stopwords = ['fakat', 'lakin', 'ancak', 'acaba', 'ama', 'aslında', 'az', 'bazı', 'belki', 'biri', 'birkaç',
+                 'birşey', 'biz', 'bu', 'çok', 'çünkü', 'da', 'daha', 'de', 'defa', 'diye', 'eğer', 'en', 'gibi', 'hem',
+                 'hep', 'hepsi', 'her', 'hiç', 'için', 'ile', 'ise', 'kez', 'ki', 'kim', 'mı', 'mu', 'mü', 'nasıl',
+                 'ne', 'neden', 'nerde', 'nerede', 'nereye', 'niçin', 'niye', 'o', 'sanki', 'şey', 'siz', 'şu', 'tüm',
+                 've', 'veya', 'ya', 'yani']
+    semboller = string.punctuation
+    sutun = sutun.lower()
+    for sembol in semboller:
+        sutun = sutun.replace(sembol, " ")
+
+    for stopword in stopwords:
+        s = " " + stopword + " "
+        sutun = sutun.replace(s, " ")
+
+    sutun = sutun.replace("  ", " ")
+
+    return sutun
+
+
+df['Metin'] = df['Metin'].apply(temizle)
+
+
+cv=CountVectorizer(max_features=250)
+X=cv.fit_transform(df['Metin']).toarray()
+y=df['Durum']
+
+x_train,x_test,y_train,y_test=train_test_split(X,y,train_size=0.75,random_state=42)
+
+y=st.text_area("Yorum Metnini Giriniz")
+btn=st.button("Yorumu Kategorilendir")
+if btn:
+    rf = RandomForestClassifier()
+    model = rf.fit(x_train, y_train)
+    skor=model.score(x_test, y_test)
+
+    tahmin = cv.transform(np.array([y])).toarray()
+    kat = {
+        1: "Olumlu",
+        0: "Olumsuz",
+        2: "Nötr"
+    }
+    sonuc = model.predict(tahmin)
+    s=kat.get(sonuc[0])
+    st.subheader(s)
+    st.write("Model Skoru:",skor)
+
+    c.execute("INSERT INTO testler VALUES(?,?,?)",(y,s,zaman))
+    conn.commit()
+
+
+kod='''
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+import string
+
+df=pd.read_csv("yorum.csv.zip",on_bad_lines="skip",delimiter=";")
+
+
+def temizle(sutun):
+    stopwords = ['fakat', 'lakin', 'ancak', 'acaba', 'ama', 'aslında', 'az', 'bazı', 'belki', 'biri', 'birkaç',
+                 'birşey', 'biz', 'bu', 'çok', 'çünkü', 'da', 'daha', 'de', 'defa', 'diye', 'eğer', 'en', 'gibi', 'hem',
+                 'hep', 'hepsi', 'her', 'hiç', 'için', 'ile', 'ise', 'kez', 'ki', 'kim', 'mı', 'mu', 'mü', 'nasıl',
+                 'ne', 'neden', 'nerde', 'nerede', 'nereye', 'niçin', 'niye', 'o', 'sanki', 'şey', 'siz', 'şu', 'tüm',
+                 've', 'veya', 'ya', 'yani']
+    semboller = string.punctuation
+    sutun = sutun.lower()
+    for sembol in semboller:
+        sutun = sutun.replace(sembol, " ")
+
+    for stopword in stopwords:
+        s = " " + stopword + " "
+        sutun = sutun.replace(s, " ")
+
+    sutun = sutun.replace("  ", " ")
+
+    return sutun
+
+
+df['Metin'] = df['Metin'].apply(temizle)
+
+
+cv=CountVectorizer(max_features=250)
+X=cv.fit_transform(df['Metin']).toarray()
+y=df['Durum']
+
+x_train,x_test,y_train,y_test=train_test_split(X,y,train_size=0.75,random_state=42)
+
+y=st.text_area("Yorum Metnini Giriniz")
+btn=st.button("Yorumu Kategorilendir")
+if btn:
+    rf = RandomForestClassifier()
+    model = rf.fit(x_train, y_train)
+    skor=model.score(x_test, y_test)
+
+    tahmin = cv.transform(np.array([y])).toarray()
+    kat = {
+        1: "Olumlu",
+        0: "Olumsuz",
+        2: "Nötr"
+    }
+    sonuc = model.predict(tahmin)
+    s=kat.get(sonuc[0])
+    st.subheader(s)
+    st.write("Model Skoru:",skor)
+'''
+
+st.header("Source/Kaynak Kodları")
+st.code(kod,language="python")
+
+
+c.execute("SELECT * FROM testler")
+testler=c.fetchall()
+
+st.table(testler)
